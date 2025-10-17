@@ -1,39 +1,38 @@
 #!/bin/bash
 
-# Skrypt do konfiguracji serwera Nginx dla aplikacji "Generator Opisów Celów".
+# Skrypt do konfiguracji serwera Nginx dla aplikacji "Generator Opisów Celów" na systemie RHEL 8.
 # Uruchom ten skrypt z uprawnieniami roota, np. przez 'sudo bash install.sh.txt'
 
 # Zatrzymaj wykonywanie skryptu w przypadku błędu
 set -e
 
-# --- Konfiguracja Użytkownika ---
-# WAŻNE: Zmień tę ścieżkę na absolutną ścieżkę do katalogu,
-#        w którym znajdują się pliki Twojej aplikacji (np. tam, gdzie sklonowałeś repozytorium).
-#        Ten katalog zostanie utworzony, jeśli nie istnieje.
+# --- Konfiguracja ---
+# Katalog docelowy, gdzie zostaną umieszczone pliki aplikacji
 APP_DIRECTORY="/var/www/goal-generator-app"
+# Katalog źródłowy (zakładamy, że jest to podkatalog 'dist' w miejscu uruchomienia skryptu)
+SOURCE_DIRECTORY="./dist"
 
-# --- Instalacja i Konfiguracja Nginx ---
-echo ">>> Krok 1/4: Konfiguracja Nginx..."
+# --- Krok 1: Instalacja i Konfiguracja Nginx ---
+echo ">>> Krok 1/5: Konfiguracja Nginx..."
 
 # Sprawdzenie, czy Nginx jest zainstalowany
 if ! command -v nginx &> /dev/null
 then
     echo "Nginx nie został znaleziony. Próba instalacji..."
-    # Użyj odpowiedniego menedżera pakietów dla swojego systemu
-    if command -v apt-get &> /dev/null; then
-        apt-get update
-        apt-get install -y nginx
+    # Użyj dnf (RHEL 8+) lub yum jako fallback
+    if command -v dnf &> /dev/null; then
+        dnf install -y nginx
     elif command -v yum &> /dev/null; then
         yum install -y nginx
     else
-        echo "Nie udało się zidentyfikować menedżera pakietów. Zainstaluj Nginx ręcznie i uruchom skrypt ponownie."
+        echo "Nie udało się zidentyfikować menedżera pakietów (dnf/yum). Zainstaluj Nginx ręcznie i uruchom skrypt ponownie."
         exit 1
     fi
 fi
 
-# Tworzenie pliku konfiguracyjnego Nginx dla aplikacji
-# Konfiguracja nasłuchuje na porcie 8181 tylko dla IPv4, zgodnie z prośbą.
-NGINX_CONF_PATH="/etc/nginx/sites-available/goal-generator"
+# Tworzenie pliku konfiguracyjnego Nginx w standardowej lokalizacji dla RHEL
+NGINX_CONF_PATH="/etc/nginx/conf.d/goal-generator.conf"
+echo "Tworzenie pliku konfiguracyjnego w $NGINX_CONF_PATH..."
 cat <<EOF > $NGINX_CONF_PATH
 server {
     listen 8181;
@@ -55,43 +54,49 @@ server {
 }
 EOF
 
-# Włączenie nowej konfiguracji poprzez utworzenie dowiązania symbolicznego
-ln -sf $NGINX_CONF_PATH /etc/nginx/sites-enabled/
-
-# Usunięcie domyślnej konfiguracji Nginx, jeśli istnieje, aby uniknąć konfliktów
-if [ -f /etc/nginx/sites-enabled/default ]; then
-    echo "Usuwanie domyślnej konfiguracji Nginx..."
-    rm /etc/nginx/sites-enabled/default
-fi
-
 echo "Konfiguracja Nginx została utworzona."
 
-# --- Przygotowanie katalogu aplikacji ---
-echo ">>> Krok 2/4: Przygotowanie katalogu aplikacji..."
+# --- Krok 2: Przygotowanie katalogu aplikacji ---
+echo ">>> Krok 2/5: Przygotowanie katalogu aplikacji..."
 
-# Utwórz katalog, jeśli nie istnieje
-mkdir -p $APP_DIRECTORY
+# Sprawdzenie, czy katalog źródłowy istnieje
+if [ ! -d "$SOURCE_DIRECTORY" ]; then
+    echo "BŁĄD: Katalog źródłowy '$SOURCE_DIRECTORY' nie został znaleziony."
+    echo "Upewnij się, że zbudowałeś aplikację (np. 'npm run build') i uruchamiasz skrypt z głównego katalogu projektu."
+    exit 1
+fi
 
-# Tutaj powinieneś umieścić pliki aplikacji.
-# Skrypt zakłada, że uruchamiasz go z głównego katalogu projektu
-# i kopiuje wszystkie pliki (oprócz samego siebie) do docelowej lokalizacji.
-echo "Kopiowanie plików aplikacji do $APP_DIRECTORY..."
-# Używamy rsync dla lepszej kontroli i wydajności
-rsync -a --exclude='install.sh.txt' ./ $APP_DIRECTORY/
+# Utwórz katalog docelowy, jeśli nie istnieje
+mkdir -p "$APP_DIRECTORY"
+
+# Kopiowanie plików aplikacji z katalogu 'dist'
+echo "Kopiowanie plików aplikacji z '$SOURCE_DIRECTORY' do '$APP_DIRECTORY'..."
+rsync -a "$SOURCE_DIRECTORY/" "$APP_DIRECTORY/"
 
 echo "Pliki aplikacji zostały skopiowane."
 
-# --- Ustawianie uprawnień ---
-echo ">>> Krok 3/4: Ustawianie uprawnień do plików..."
+# --- Krok 3: Ustawianie uprawnień plików ---
+echo ">>> Krok 3/5: Ustawianie uprawnień do plików..."
 
 # Zmiana właściciela katalogu na użytkownika i grupę nginx
-# Umożliwi to serwerowi Nginx bezpieczny dostęp do plików.
-chown -R nginx:nginx $APP_DIRECTORY
+chown -R nginx:nginx "$APP_DIRECTORY"
 
-echo "Uprawnienia zostały ustawione na nginx:nginx."
+echo "Właściciel plików został ustawiony na 'nginx:nginx'."
 
-# --- Finalizacja i Restart Usługi ---
-echo ">>> Krok 4/4: Finalizacja..."
+# --- Krok 4: Konfiguracja SELinux ---
+echo ">>> Krok 4/5: Konfiguracja kontekstu SELinux..."
+# Jest to kluczowy krok w systemach RHEL, aby zezwolić Nginx na odczyt plików.
+# Jeśli SELinux jest wyłączony, to polecenie nie zaszkodzi.
+if command -v chcon &> /dev/null; then
+    echo "Ustawianie kontekstu httpd_sys_content_t dla katalogu aplikacji..."
+    chcon -t httpd_sys_content_t -R "$APP_DIRECTORY"
+else
+    echo "Polecenie 'chcon' niedostępne, pomijanie konfiguracji SELinux."
+fi
+
+
+# --- Krok 5: Finalizacja i Restart Usługi ---
+echo ">>> Krok 5/5: Finalizacja..."
 
 # Sprawdzenie poprawności składni konfiguracji Nginx
 echo "Testowanie konfiguracji Nginx..."
@@ -100,7 +105,7 @@ nginx -t
 # Restart usługi Nginx w celu załadowania nowej konfiguracji
 echo "Restartowanie usługi Nginx..."
 systemctl restart nginx
-systemctl enable nginx # Opcjonalnie: włącz Nginx przy starcie systemu
+systemctl enable nginx # Włącz Nginx przy starcie systemu
 
 echo ""
 echo "----------------------------------------------------"
@@ -108,4 +113,3 @@ echo "✅ Instalacja zakończona pomyślnie!"
 echo "Twoja aplikacja powinna być dostępna pod adresem:"
 echo "http://<TWOJ_ADRES_IP_SERWERA>:8181"
 echo "----------------------------------------------------"
-
