@@ -1,0 +1,111 @@
+#!/bin/bash
+
+# Skrypt do konfiguracji serwera Nginx dla aplikacji "Generator Opisów Celów".
+# Uruchom ten skrypt z uprawnieniami roota, np. przez 'sudo bash install.sh.txt'
+
+# Zatrzymaj wykonywanie skryptu w przypadku błędu
+set -e
+
+# --- Konfiguracja Użytkownika ---
+# WAŻNE: Zmień tę ścieżkę na absolutną ścieżkę do katalogu,
+#        w którym znajdują się pliki Twojej aplikacji (np. tam, gdzie sklonowałeś repozytorium).
+#        Ten katalog zostanie utworzony, jeśli nie istnieje.
+APP_DIRECTORY="/var/www/goal-generator-app"
+
+# --- Instalacja i Konfiguracja Nginx ---
+echo ">>> Krok 1/4: Konfiguracja Nginx..."
+
+# Sprawdzenie, czy Nginx jest zainstalowany
+if ! command -v nginx &> /dev/null
+then
+    echo "Nginx nie został znaleziony. Próba instalacji..."
+    # Użyj odpowiedniego menedżera pakietów dla swojego systemu
+    if command -v apt-get &> /dev/null; then
+        apt-get update
+        apt-get install -y nginx
+    elif command -v yum &> /dev/null; then
+        yum install -y nginx
+    else
+        echo "Nie udało się zidentyfikować menedżera pakietów. Zainstaluj Nginx ręcznie i uruchom skrypt ponownie."
+        exit 1
+    fi
+fi
+
+# Tworzenie pliku konfiguracyjnego Nginx dla aplikacji
+# Konfiguracja nasłuchuje na porcie 8181 tylko dla IPv4, zgodnie z prośbą.
+NGINX_CONF_PATH="/etc/nginx/sites-available/goal-generator"
+cat <<EOF > $NGINX_CONF_PATH
+server {
+    listen 8181;
+    server_name _;
+
+    # Ścieżka do głównego katalogu aplikacji
+    root $APP_DIRECTORY;
+    index index.html;
+
+    # Konfiguracja dla aplikacji typu Single Page Application (SPA)
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    # Dodatkowe nagłówki bezpieczeństwa (opcjonalnie, ale zalecane)
+    add_header X-Content-Type-Options "nosniff";
+    add_header X-Frame-Options "DENY";
+    add_header X-XSS-Protection "1; mode=block";
+}
+EOF
+
+# Włączenie nowej konfiguracji poprzez utworzenie dowiązania symbolicznego
+ln -sf $NGINX_CONF_PATH /etc/nginx/sites-enabled/
+
+# Usunięcie domyślnej konfiguracji Nginx, jeśli istnieje, aby uniknąć konfliktów
+if [ -f /etc/nginx/sites-enabled/default ]; then
+    echo "Usuwanie domyślnej konfiguracji Nginx..."
+    rm /etc/nginx/sites-enabled/default
+fi
+
+echo "Konfiguracja Nginx została utworzona."
+
+# --- Przygotowanie katalogu aplikacji ---
+echo ">>> Krok 2/4: Przygotowanie katalogu aplikacji..."
+
+# Utwórz katalog, jeśli nie istnieje
+mkdir -p $APP_DIRECTORY
+
+# Tutaj powinieneś umieścić pliki aplikacji.
+# Skrypt zakłada, że uruchamiasz go z głównego katalogu projektu
+# i kopiuje wszystkie pliki (oprócz samego siebie) do docelowej lokalizacji.
+echo "Kopiowanie plików aplikacji do $APP_DIRECTORY..."
+# Używamy rsync dla lepszej kontroli i wydajności
+rsync -a --exclude='install.sh.txt' ./ $APP_DIRECTORY/
+
+echo "Pliki aplikacji zostały skopiowane."
+
+# --- Ustawianie uprawnień ---
+echo ">>> Krok 3/4: Ustawianie uprawnień do plików..."
+
+# Zmiana właściciela katalogu na użytkownika i grupę nginx
+# Umożliwi to serwerowi Nginx bezpieczny dostęp do plików.
+chown -R nginx:nginx $APP_DIRECTORY
+
+echo "Uprawnienia zostały ustawione na nginx:nginx."
+
+# --- Finalizacja i Restart Usługi ---
+echo ">>> Krok 4/4: Finalizacja..."
+
+# Sprawdzenie poprawności składni konfiguracji Nginx
+echo "Testowanie konfiguracji Nginx..."
+nginx -t
+
+# Restart usługi Nginx w celu załadowania nowej konfiguracji
+echo "Restartowanie usługi Nginx..."
+systemctl restart nginx
+systemctl enable nginx # Opcjonalnie: włącz Nginx przy starcie systemu
+
+echo ""
+echo "----------------------------------------------------"
+echo "✅ Instalacja zakończona pomyślnie!"
+echo "Twoja aplikacja powinna być dostępna pod adresem:"
+echo "http://<TWOJ_ADRES_IP_SERWERA>:8181"
+echo "----------------------------------------------------"
+
