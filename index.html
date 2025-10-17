@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Generator Opisów Celów</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --glow-color-1: #0ea5e9; /* sky-500 */
+        --glow-color-2: #6366f1; /* indigo-500 */
+        --background-start: #0F172A; /* Slate 900 */
+        --background-end: #020617; /* Slate 950 */
+      }
+      
+      body {
+        background-color: var(--background-end);
+        background-image: radial-gradient(at 20% 20%, var(--background-start) 0px, transparent 50%),
+                          radial-gradient(at 80% 80%, var(--background-start) 0px, transparent 50%);
+        position: relative;
+        overflow-x: hidden;
+        font-family: 'Inter', sans-serif;
+        color: #e2e8f0;
+      }
+
+      /* Subtelne, animowane tło "Aurora" */
+      body::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: radial-gradient(circle at 15% 25%, rgba(2, 132, 199, 0.15) 0%, transparent 40%),
+                    radial-gradient(circle at 85% 75%, rgba(59, 130, 246, 0.1) 0%, transparent 45%);
+        animation: moveGradient 25s linear infinite;
+        z-index: 0;
+        will-change: background;
+      }
+      
+      #root {
+        position: relative;
+        z-index: 1;
+      }
+
+      @keyframes moveGradient {
+        0% { background-position: 0% 0%; }
+        25% { background-position: 25% 100%; }
+        50% { background-position: 100% 100%; }
+        75% { background-position: 75% 0%; }
+        100% { background-position: 0% 0%; }
+      }
+
+      @keyframes gradient-animation {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+
+      .animate-gradient-text {
+        background-size: 200% 200%;
+        animation: gradient-animation 5s ease-in-out infinite;
+      }
+      
+      @keyframes moveGradientBorder {
+        0% { background-position: 0% center; }
+        100% { background-position: -400% center; }
+      }
+
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .animate-fadeInUp {
+        animation: fadeInUp 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        opacity: 0; /* Start hidden */
+      }
+      
+      /* NOWY, ANIMOWANY EFEKT POŚWIATY (MIENIĄCY SIĘ) */
+      .glow-container {
+        position: relative;
+        background-color: rgba(2, 6, 23, 0.7); /* bg-slate-950/70 */
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 1rem; /* rounded-2xl */
+        padding: 1px; /* Aby zapobiec "zapadaniu się" pseudoelementu */
+      }
+      
+      .glow-container::before {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        border-radius: inherit;
+        background: linear-gradient(90deg, 
+          var(--glow-color-1), 
+          var(--glow-color-2), 
+          #a855f7, /* purple-500 */
+          #ec4899, /* pink-500 */
+          var(--glow-color-1)
+        );
+        background-size: 400%;
+        opacity: 0;
+        transition: opacity 0.4s ease-out;
+        z-index: -1;
+      }
+
+      .glow-container:hover::before {
+         opacity: 0.5;
+      }
+
+      .glow-active::before, .glow-active:hover::before {
+        opacity: 1;
+        animation: moveGradientBorder 5s linear infinite;
+      }
+      
+      /* Styl dla aktywnego inputa */
+      .input-wrapper {
+        position: relative;
+      }
+
+      /* Podświetlenie wewnętrzne dla pól tekstowych */
+      .input-wrapper::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 2px;
+        background: linear-gradient(90deg, 
+          var(--glow-color-1), 
+          var(--glow-color-2), 
+          #a855f7, /* purple-500 */
+          #ec4899, /* pink-500 */
+          var(--glow-color-1)
+        );
+        background-size: 400%;
+        opacity: 0;
+        transition: opacity 0.4s ease-out;
+      }
+
+      .input-wrapper.glowing-input-active::after {
+        opacity: 1;
+        animation: moveGradientBorder 5s linear infinite;
+      }
+      
+      /* EFEKT FALI (RIPPLE) DLA PRZYCISKÓW */
+      .ripple-btn {
+        position: relative;
+        overflow: hidden;
+      }
+      .ripple-btn .ripple {
+        position: absolute;
+        border-radius: 50%;
+        background-color: rgba(255, 255, 255, 0.3);
+        transform: scale(0);
+        animation: ripple-anim 0.6s ease-out;
+      }
+      @keyframes ripple-anim {
+        to {
+          transform: scale(4);
+          opacity: 0;
+        }
+      }
+      
+      /* STYLE DLA PRZYCISKÓW AKCJI AI */
+      .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem; /* 8px */
+        padding: 0.5rem 1rem; /* 8px 16px */
+        font-size: 0.875rem; /* 14px */
+        font-weight: 600;
+        color: #cbd5e1; /* slate-300 */
+        background-color: rgba(30, 41, 59, 0.7); /* slate-800/70 */
+        border: 1px solid rgba(51, 65, 85, 1); /* slate-700 */
+        border-radius: 0.5rem; /* rounded-lg */
+        transition: all 0.2s ease-in-out;
+      }
+      .action-btn:hover {
+        background-color: rgba(14, 165, 233, 0.2); /* sky-500/20 */
+        border-color: #0ea5e9; /* sky-500 */
+        color: #e0f2fe; /* sky-100 */
+      }
+      .action-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      /* STYLE DLA SEKCJI KONFIGURACJI */
+      details summary {
+        list-style: none; /* Usuń domyślną strzałkę */
+        cursor: pointer;
+      }
+      details summary::-webkit-details-marker {
+        display: none; /* Ukryj strzałkę w Chrome/Safari */
+      }
+      details summary .arrow {
+        transition: transform 0.2s ease-in-out;
+      }
+      details[open] summary .arrow {
+        transform: rotate(90deg);
+      }
+
+    </style>
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.25.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-slate-950 text-slate-200">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

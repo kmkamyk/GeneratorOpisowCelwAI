@@ -1,0 +1,5 @@
+{
+  "name": "Generator Opisów Celów",
+  "description": "Aplikacja, która generuje szczegółowe opisy dla Twoich celów zawodowych na podstawie listy wykonanych zadań z Jiry, wykorzystując AI.",
+  "requestFramePermissions": []
+}
