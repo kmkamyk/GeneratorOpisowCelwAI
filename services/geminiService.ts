@@ -1,11 +1,11 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ResultItem } from '../types';
 
-export const generateDescriptionsForGoals = async (
-  goals: string[],
+export const generateDescriptionForSingleGoal = async (
+  goal: string,
   tasks: string,
   style: string
-): Promise<Omit<ResultItem, 'id' | 'isRefining'>[]> => {
+): Promise<Omit<ResultItem, 'id' | 'isRefining' | 'status'>> => {
   if (!process.env.API_KEY) {
     throw new Error("API key not found. Please set the API_KEY environment variable.");
   }
@@ -33,57 +33,53 @@ export const generateDescriptionsForGoals = async (
     ? `Ważne: Opis musi być napisany w stylu: "${style}".`
     : '';
 
-  const promises = goals.map(async (goal): Promise<Omit<ResultItem, 'id' | 'isRefining'>> => {
-    const prompt = `
-      Jesteś ekspertem w formułowaniu opisów osiągnięć zawodowych. Twoim zadaniem jest zidentyfikowanie zadań z podanej listy, które są bezpośrednio powiązane z podanym celem, a następnie stworzenie na ich podstawie rozbudowanego opisu celu.
+  const prompt = `
+    Jesteś ekspertem w formułowaniu opisów osiągnięć zawodowych. Twoim zadaniem jest zidentyfikowanie zadań z podanej listy, które są bezpośrednio powiązane z podanym celem, a następnie stworzenie na ich podstawie rozbudowanego opisu celu.
 
-      ${styleInstruction}
+    ${styleInstruction}
 
-      Analizowany Cel:
-      "${goal}"
+    Analizowany Cel:
+    "${goal}"
 
-      Pełna lista wykonanych zadań (kontekst):
-      ---
-      ${tasks}
-      ---
+    Pełna lista wykonanych zadań (kontekst):
+    ---
+    ${tasks}
+    ---
 
-      Twoje zadania:
-      1.  Dokładnie przeanalizuj listę zadań i zidentyfikuj te, które przyczyniły się do realizacji celu "${goal}".
-      2.  Na podstawie wybranych zadań, napisz profesjonalny, szczegółowy opis celu (dwa do trzech akapitów), podkreślając wkład tych zadań i osiągnięte rezultaty.
-      3.  Zwróć wynik w formacie JSON, używając zdefiniowanego schematu. Klucz 'relevantTasks' powinien zawierać listę pełnych nazw zadań (np. "PROJ-123: Analiza wymagań"), które wybrałeś.
+    Twoje zadania:
+    1.  Dokładnie przeanalizuj listę zadań i zidentyfikuj te, które przyczyniły się do realizacji celu "${goal}".
+    2.  Na podstawie wybranych zadań, napisz profesjonalny, szczegółowy opis celu (dwa do trzech akapitów), podkreślając wkład tych zadań i osiągnięte rezultaty.
+    3.  Zwróć wynik w formacie JSON, używając zdefiniowanego schematu. Klucz 'relevantTasks' powinien zawierać listę pełnych nazw zadań (np. "PROJ-123: Analiza wymagań"), które wybrałeś.
 
-      Wygeneruj wyłącznie obiekt JSON.
-    `;
+    Wygeneruj wyłącznie obiekt JSON.
+  `;
 
-    try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema,
-        },
-      });
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema,
+      },
+    });
 
-      const responseText = response.text.trim();
-      const parsedJson = JSON.parse(responseText);
-      
-      return {
-        goal,
-        description: parsedJson.description || "Nie udało się wygenerować opisu.",
-        usedTasks: parsedJson.relevantTasks || [],
-      };
-    } catch (error) {
-      console.error(`Error generating description for goal "${goal}":`, error);
-      return {
-        goal,
-        description: "Wystąpił błąd podczas generowania opisu dla tego celu. Sprawdź konsolę, aby uzyskać więcej informacji.",
-        usedTasks: [],
-      };
-    }
-  });
-
-  return Promise.all(promises);
+    const responseText = response.text.trim();
+    const parsedJson = JSON.parse(responseText);
+    
+    return {
+      goal,
+      description: parsedJson.description || "Nie udało się wygenerować opisu.",
+      usedTasks: parsedJson.relevantTasks || [],
+    };
+  } catch (error) {
+    console.error(`Error generating description for goal "${goal}":`, error);
+    return {
+      goal,
+      description: "Wystąpił błąd podczas generowania opisu dla tego celu. Sprawdź konsolę, aby uzyskać więcej informacji.",
+      usedTasks: [],
+    };
+  }
 };
 
 

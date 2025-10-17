@@ -1,8 +1,9 @@
 export interface ResultItem {
   id: string;
   goal: string;
-  description: string;
-  usedTasks: string[];
+  status: 'loading' | 'completed';
+  description?: string;
+  usedTasks?: string[];
   isRefining?: boolean;
 }
 

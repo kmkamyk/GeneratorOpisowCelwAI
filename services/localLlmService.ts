@@ -94,61 +94,57 @@ async function executeLocalApiCall(url: string, body: object) {
   }
 }
 
-export const generateDescriptionsForGoalsLocal = async (
-  goals: string[],
+export const generateDescriptionForSingleGoalLocal = async (
+  goal: string,
   tasks: string,
   style: string,
   config: LocalLlmConfig
-): Promise<Omit<ResultItem, 'id' | 'isRefining'>[]> => {
-  const promises = goals.map(async (goal): Promise<Omit<ResultItem, 'id' | 'isRefining'>> => {
-    const prompt = buildGenerationPrompt(goal, tasks, style);
-    let requestBody;
-    let apiUrl;
+): Promise<Omit<ResultItem, 'id' | 'isRefining' | 'status'>> => {
+  const prompt = buildGenerationPrompt(goal, tasks, style);
+  let requestBody;
+  let apiUrl;
 
+  if (config.provider === 'ollama') {
+    apiUrl = new URL('/api/generate', config.apiAddress).toString();
+    requestBody = {
+      model: config.modelName,
+      prompt: prompt,
+      stream: false,
+      format: 'json',
+    };
+  } else { // llama.cpp
+    apiUrl = new URL('/completion', config.apiAddress).toString();
+    requestBody = {
+      prompt: prompt.replace("Wygeneruj wyłącznie obiekt JSON.", ""), // Llama.cpp uses schema, so instruction is redundant
+      n_predict: 1024,
+      json_schema: JSON_SCHEMA,
+    };
+  }
+
+  try {
+    const data = await executeLocalApiCall(apiUrl, requestBody);
+    
+    let parsedJson;
     if (config.provider === 'ollama') {
-      apiUrl = new URL('/api/generate', config.apiAddress).toString();
-      requestBody = {
-        model: config.modelName,
-        prompt: prompt,
-        stream: false,
-        format: 'json',
-      };
+      parsedJson = JSON.parse(data.response);
     } else { // llama.cpp
-      apiUrl = new URL('/completion', config.apiAddress).toString();
-      requestBody = {
-        prompt: prompt.replace("Wygeneruj wyłącznie obiekt JSON.", ""), // Llama.cpp uses schema, so instruction is redundant
-        n_predict: 1024,
-        json_schema: JSON_SCHEMA,
-      };
+      parsedJson = JSON.parse(data.content);
     }
-
-    try {
-      const data = await executeLocalApiCall(apiUrl, requestBody);
-      
-      let parsedJson;
-      if (config.provider === 'ollama') {
-        parsedJson = JSON.parse(data.response);
-      } else { // llama.cpp
-        parsedJson = JSON.parse(data.content);
-      }
-      
-      return {
-        goal,
-        description: parsedJson.description || "Nie udało się wygenerować opisu.",
-        usedTasks: parsedJson.relevantTasks || [],
-      };
-    } catch (error) {
-      console.error(`Error generating description for goal "${goal}" with ${config.provider}:`, error);
-      const errorMessage = error instanceof Error ? error.message : "Nieznany błąd";
-      return {
-        goal,
-        description: `Wystąpił błąd podczas generowania opisu: ${errorMessage}`,
-        usedTasks: [],
-      };
-    }
-  });
-
-  return Promise.all(promises);
+    
+    return {
+      goal,
+      description: parsedJson.description || "Nie udało się wygenerować opisu.",
+      usedTasks: parsedJson.relevantTasks || [],
+    };
+  } catch (error) {
+    console.error(`Error generating description for goal "${goal}" with ${config.provider}:`, error);
+    const errorMessage = error instanceof Error ? error.message : "Nieznany błąd";
+    return {
+      goal,
+      description: `Wystąpił błąd podczas generowania opisu: ${errorMessage}`,
+      usedTasks: [],
+    };
+  }
 };
 
 export const refineDescriptionLocal = async (

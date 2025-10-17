@@ -48,10 +48,15 @@ const ResultCard: React.FC<ResultCardProps> = ({ item, animationDelay, onRefine 
   const [isTasksVisible, setIsTasksVisible] = useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(item.description);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+    if (item.description) {
+      navigator.clipboard.writeText(item.description);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    }
   };
+
+  const description = item.description || "";
+  const usedTasks = item.usedTasks || [];
 
   return (
     <div 
@@ -78,7 +83,7 @@ const ResultCard: React.FC<ResultCardProps> = ({ item, animationDelay, onRefine 
           </div>
         )}
         <div className={`prose prose-slate max-w-none text-slate-600 transition-opacity duration-300 ${item.isRefining ? 'opacity-30' : 'opacity-100'}`}>
-          {item.description.split('\n').map((paragraph, index) => (
+          {description.split('\n').map((paragraph, index) => (
             paragraph.trim() && <p key={index}>{paragraph}</p>
           ))}
         </div>
@@ -87,14 +92,14 @@ const ResultCard: React.FC<ResultCardProps> = ({ item, animationDelay, onRefine 
       <footer className="px-6 pb-6 pt-2">
         <details className="group" onToggle={(e) => setIsTasksVisible((e.target as HTMLDetailsElement).open)}>
            <summary className="list-none flex items-center justify-between cursor-pointer text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors">
-            <span>Użyte zadania ({item.usedTasks.length})</span>
+            <span>Użyte zadania ({usedTasks.length})</span>
              <svg className={`h-5 w-5 transition-transform duration-200 ${isTasksVisible ? 'rotate-90' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
              </svg>
           </summary>
           <ul className="mt-3 space-y-2 text-sm text-slate-500 pl-4 list-disc list-outside">
-            {item.usedTasks.length > 0 ? (
-                item.usedTasks.map((task, index) => (
+            {usedTasks.length > 0 ? (
+                usedTasks.map((task, index) => (
                     <li key={index} className="break-words">{task}</li>
                 ))
             ) : (

@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { generateDescriptionsForGoals } from './services/geminiService';
+import { generateDescriptionForSingleGoal } from './services/geminiService';
 import { refineDescription } from './services/geminiService';
-import { generateDescriptionsForGoalsLocal, refineDescriptionLocal } from './services/localLlmService';
+import { generateDescriptionForSingleGoalLocal, refineDescriptionLocal } from './services/localLlmService';
 import { ResultItem, ApiProvider, LocalLlmConfig, LocalProvider } from './types';
 import Header from './components/Header';
 import TextAreaInput from './components/TextAreaInput';
-import Loader from './components/Loader';
 import ResultCard from './components/ResultCard';
+import ResultCardSkeleton from './components/ResultCardSkeleton';
 import EmptyState from './components/EmptyState';
 import StyleSelector from './components/StyleSelector';
 import LocalLlmConfigComponent from './components/LocalLlmConfig';
@@ -37,7 +37,6 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [style, setStyle] = useState('Domyślny');
   
-  // New state for local LLM configuration
   const [apiProvider, setApiProvider] = useState<ApiProvider>('gemini');
   const [localLlmConfig, setLocalLlmConfig] = useState<LocalLlmConfig>({
     provider: 'ollama',
@@ -45,7 +44,6 @@ const App: React.FC = () => {
     modelName: 'llama3'
   });
 
-  // Update default address when provider changes
   useEffect(() => {
     setLocalLlmConfig(prev => ({
       ...prev,
@@ -79,23 +77,35 @@ const App: React.FC = () => {
 
     const goalsArray = goals.split('\n').filter(g => g.trim() !== '');
 
-    try {
-      let generatedResultsData;
-      if (apiProvider === 'gemini') {
-        generatedResultsData = await generateDescriptionsForGoals(goalsArray, tasks, style);
-      } else {
-        generatedResultsData = await generateDescriptionsForGoalsLocal(goalsArray, tasks, style, localLlmConfig);
-      }
+    const skeletonResults: ResultItem[] = goalsArray.map(goal => ({
+      id: crypto.randomUUID(),
+      goal,
+      status: 'loading',
+    }));
+    setResults(skeletonResults);
 
-      const newResults: ResultItem[] = generatedResultsData.map(res => ({
-        ...res,
-        id: crypto.randomUUID(),
-      }));
-      setResults(prev => [...newResults, ...prev]);
+    try {
+        for (const skeleton of skeletonResults) {
+            let generatedData;
+             if (apiProvider === 'gemini') {
+                generatedData = await generateDescriptionForSingleGoal(skeleton.goal, tasks, style);
+            } else {
+                generatedData = await generateDescriptionForSingleGoalLocal(skeleton.goal, tasks, style, localLlmConfig);
+            }
+
+            setResults(prevResults => 
+                prevResults.map(res => 
+                    res.id === skeleton.id 
+                    ? { ...res, ...generatedData, status: 'completed' } 
+                    : res
+                )
+            );
+        }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Wystąpił nieznany błąd.";
       setError(`Błąd API: ${errorMessage}`);
       console.error(err);
+      setResults([]); // Clear skeletons on error
     } finally {
       setIsLoading(false);
     }
@@ -105,7 +115,7 @@ const App: React.FC = () => {
     setResults(prev => prev.map(r => r.id === id ? { ...r, isRefining: true } : r));
     
     const currentItem = results.find(r => r.id === id);
-    if (!currentItem) return;
+    if (!currentItem || !currentItem.description) return;
 
     try {
       let newDescription;
@@ -189,27 +199,36 @@ const App: React.FC = () => {
           )}
 
           <div className="mt-12">
-            {isLoading && <Loader />}
-            {!isLoading && results.length > 0 && (
+            {results.length > 0 && (
               <div className="space-y-8">
-                <div className="flex justify-between items-center mb-6 animate-fadeInUp">
-                    <h2 className="text-3xl font-bold text-slate-800">Wygenerowane Opisy</h2>
-                    <button 
-                        onClick={handleClearHistory}
-                        className="px-4 py-2 text-sm bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-700 rounded-lg transition-all duration-300"
-                        title="Wyczyść wszystkie wygenerowane opisy"
-                    >
-                        Wyczyść historię
-                    </button>
-                </div>
-                {results.map((item, index) => (
-                  <ResultCard 
-                    key={item.id} 
-                    item={item} 
-                    animationDelay={`${index * 100}ms`} 
-                    onRefine={(action) => handleRefine(item.id, action)}
-                  />
-                ))}
+                 {!isLoading && (
+                    <div className="flex justify-between items-center mb-6 animate-fadeInUp">
+                        <h2 className="text-3xl font-bold text-slate-800">Wygenerowane Opisy</h2>
+                        <button 
+                            onClick={handleClearHistory}
+                            className="px-4 py-2 text-sm bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-700 rounded-lg transition-all duration-300"
+                            title="Wyczyść wszystkie wygenerowane opisy"
+                        >
+                            Wyczyść historię
+                        </button>
+                    </div>
+                 )}
+                {results.map((item, index) =>
+                  item.status === 'loading' ? (
+                    <ResultCardSkeleton 
+                        key={item.id} 
+                        goal={item.goal} 
+                        animationDelay={`${index * 100}ms`} 
+                    />
+                  ) : (
+                    <ResultCard 
+                      key={item.id} 
+                      item={item} 
+                      animationDelay={'0ms'} 
+                      onRefine={(action) => handleRefine(item.id, action)}
+                    />
+                  )
+                )}
               </div>
             )}
              {!isLoading && !error && results.length === 0 && <EmptyState />}
