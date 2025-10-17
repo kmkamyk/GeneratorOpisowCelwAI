@@ -8,26 +8,25 @@ interface TextAreaInputProps {
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   rows?: number;
   icon: React.ReactNode;
-  isGlowing?: boolean;
 }
 
-const TextAreaInput: React.FC<TextAreaInputProps> = ({ id, label, placeholder, value, onChange, rows = 8, icon, isGlowing }) => {
+const TextAreaInput: React.FC<TextAreaInputProps> = ({ id, label, placeholder, value, onChange, rows = 8, icon }) => {
 
   return (
     <div>
       <div className="flex flex-col space-y-3 p-4">
-        <label htmlFor={id} className="flex items-center text-lg font-semibold text-slate-300">
+        <label htmlFor={id} className="flex items-center text-lg font-semibold text-slate-700">
           {icon}
           <span className="ml-3">{label}</span>
         </label>
-        <div className={`input-wrapper ${isGlowing ? 'glowing-input-active' : ''}`}>
+        <div className="input-wrapper">
           <textarea
             id={id}
             value={value}
             onChange={onChange}
             placeholder={placeholder}
             rows={rows}
-            className="w-full p-4 bg-transparent border-t-0 border-x-0 border-b-2 border-slate-700/50 rounded-none focus:outline-none focus:ring-0 focus:border-b-sky-400 transition-colors duration-300 text-slate-200 resize-y"
+            className="w-full p-4 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300 text-slate-800 resize-y placeholder:text-slate-400"
           />
         </div>
       </div>

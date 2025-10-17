@@ -23,27 +23,27 @@ const LocalLlmConfigComponent: React.FC<LocalLlmConfigProps> = ({ apiProvider, s
   };
 
   return (
-    <div className="border-t border-slate-700/50 pt-6">
+    <div className="border-t border-slate-200 pt-6">
       <details>
         <summary className="flex justify-between items-center cursor-pointer">
-          <h3 className="text-md font-semibold text-slate-300">Konfiguracja Zaawansowana</h3>
+          <h3 className="text-md font-semibold text-slate-700">Konfiguracja Zaawansowana</h3>
           <ArrowIcon />
         </summary>
         
         <div className="mt-6 space-y-6">
           {/* API Provider Switch */}
           <div>
-            <label className="block text-sm font-medium text-slate-400 mb-2">Źródło AI</label>
-            <div className="flex rounded-md bg-slate-800/60 p-1 border border-slate-700/80">
+            <label className="block text-sm font-medium text-slate-600 mb-2">Źródło AI</label>
+            <div className="flex rounded-md bg-slate-100 p-1 border border-slate-200">
               <button
                 onClick={() => setApiProvider('gemini')}
-                className={`w-full py-1.5 text-sm font-semibold rounded ${apiProvider === 'gemini' ? 'bg-sky-500 text-white' : 'text-slate-300 hover:bg-slate-700/50'} transition-all`}
+                className={`w-full py-1.5 text-sm font-semibold rounded ${apiProvider === 'gemini' ? 'bg-sky-500 text-white' : 'text-slate-600 hover:bg-slate-200'} transition-all`}
               >
                 Google Gemini
               </button>
               <button
                 onClick={() => setApiProvider('local')}
-                className={`w-full py-1.5 text-sm font-semibold rounded ${apiProvider === 'local' ? 'bg-sky-500 text-white' : 'text-slate-300 hover:bg-slate-700/50'} transition-all`}
+                className={`w-full py-1.5 text-sm font-semibold rounded ${apiProvider === 'local' ? 'bg-sky-500 text-white' : 'text-slate-600 hover:bg-slate-200'} transition-all`}
               >
                 Lokalny LLM
               </button>
@@ -52,17 +52,17 @@ const LocalLlmConfigComponent: React.FC<LocalLlmConfigProps> = ({ apiProvider, s
           
           {/* Local LLM Configuration */}
           {apiProvider === 'local' && (
-            <div className="space-y-4 p-4 border border-slate-700/50 rounded-lg">
+            <div className="space-y-4 p-4 border border-slate-200 bg-white/50 rounded-lg">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                      {/* Local Provider */}
                     <div>
-                        <label htmlFor="provider" className="block text-sm font-medium text-slate-400 mb-2">Dostawca</label>
+                        <label htmlFor="provider" className="block text-sm font-medium text-slate-600 mb-2">Dostawca</label>
                         <select
                         id="provider"
                         name="provider"
                         value={config.provider}
                         onChange={handleConfigChange}
-                        className="w-full bg-slate-800/60 border border-slate-700/80 rounded-md px-3 py-2 text-slate-200 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-all duration-300"
+                        className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-800 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-all duration-300"
                         >
                         <option value="ollama">Ollama</option>
                         <option value="llama.cpp">Llama.cpp</option>
@@ -71,7 +71,7 @@ const LocalLlmConfigComponent: React.FC<LocalLlmConfigProps> = ({ apiProvider, s
 
                     {/* Model Name */}
                     <div>
-                        <label htmlFor="modelName" className="block text-sm font-medium text-slate-400 mb-2">Nazwa Modelu</label>
+                        <label htmlFor="modelName" className="block text-sm font-medium text-slate-600 mb-2">Nazwa Modelu</label>
                         <input
                         type="text"
                         id="modelName"
@@ -79,14 +79,14 @@ const LocalLlmConfigComponent: React.FC<LocalLlmConfigProps> = ({ apiProvider, s
                         value={config.modelName}
                         onChange={handleConfigChange}
                         placeholder="np. llama3, mistral"
-                        className="w-full bg-slate-800/60 border border-slate-700/80 rounded-md px-3 py-2 text-slate-200 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-all duration-300"
+                        className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-800 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-all duration-300"
                         />
                     </div>
                 </div>
 
               {/* API Address */}
               <div>
-                <label htmlFor="apiAddress" className="block text-sm font-medium text-slate-400 mb-2">Adres API</label>
+                <label htmlFor="apiAddress" className="block text-sm font-medium text-slate-600 mb-2">Adres API</label>
                 <input
                   type="text"
                   id="apiAddress"
@@ -94,7 +94,7 @@ const LocalLlmConfigComponent: React.FC<LocalLlmConfigProps> = ({ apiProvider, s
                   value={config.apiAddress}
                   onChange={handleConfigChange}
                   placeholder="http://localhost:11434"
-                  className="w-full bg-slate-800/60 border border-slate-700/80 rounded-md px-3 py-2 text-slate-200 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-all duration-300"
+                  className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-800 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-all duration-300"
                 />
               </div>
             </div>

@@ -133,11 +133,10 @@ const App: React.FC = () => {
     glow-container
     transition-all duration-500
     p-2 sm:p-4
-    ${isLoading ? 'glow-active' : ''}
   `;
 
   return (
-    <div className="min-h-screen bg-slate-950 font-sans p-4 sm:p-6 lg:p-8 flex flex-col items-center">
+    <div className="min-h-screen bg-slate-50 font-sans p-4 sm:p-6 lg:p-8 flex flex-col items-center">
       <div className="w-full max-w-5xl mx-auto">
         <Header />
 
@@ -151,7 +150,6 @@ const App: React.FC = () => {
                 value={goals}
                 onChange={(e) => setGoals(e.target.value)}
                 icon={<GoalsIcon />}
-                isGlowing={isLoading}
               />
               <TextAreaInput
                 id="tasks-input"
@@ -160,7 +158,6 @@ const App: React.FC = () => {
                 value={tasks}
                 onChange={(e) => setTasks(e.target.value)}
                 icon={<TasksIcon />}
-                isGlowing={isLoading}
               />
             </div>
              <div className="mt-6 px-4 space-y-6">
@@ -186,7 +183,7 @@ const App: React.FC = () => {
           </div>
           
           {error && (
-            <div className="mt-8 text-center bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-lg animate-fadeInUp">
+            <div className="mt-8 text-center bg-red-100 border border-red-400 text-red-700 p-4 rounded-lg animate-fadeInUp">
               <p>{error}</p>
             </div>
           )}
@@ -196,10 +193,10 @@ const App: React.FC = () => {
             {!isLoading && results.length > 0 && (
               <div className="space-y-8">
                 <div className="flex justify-between items-center mb-6 animate-fadeInUp">
-                    <h2 className="text-3xl font-bold text-slate-200">Wygenerowane Opisy</h2>
+                    <h2 className="text-3xl font-bold text-slate-800">Wygenerowane Opisy</h2>
                     <button 
                         onClick={handleClearHistory}
-                        className="px-4 py-2 text-sm bg-slate-800/70 hover:bg-red-500/30 text-slate-400 hover:text-red-300 rounded-lg transition-all duration-300"
+                        className="px-4 py-2 text-sm bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-700 rounded-lg transition-all duration-300"
                         title="Wyczyść wszystkie wygenerowane opisy"
                     >
                         Wyczyść historię
