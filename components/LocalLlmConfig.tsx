@@ -22,6 +22,8 @@ const LocalLlmConfigComponent: React.FC<LocalLlmConfigProps> = ({ apiProvider, s
     setConfig({ ...config, [name]: value });
   };
 
+  const placeholder = config.provider === 'ollama' ? 'http://localhost:11434' : 'http://localhost:8080';
+
   return (
     <div className="border-t border-slate-200 pt-6">
       <details>
@@ -93,9 +95,14 @@ const LocalLlmConfigComponent: React.FC<LocalLlmConfigProps> = ({ apiProvider, s
                   name="apiAddress"
                   value={config.apiAddress}
                   onChange={handleConfigChange}
-                  placeholder="http://localhost:11434"
+                  placeholder={placeholder}
                   className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-800 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-all duration-300"
                 />
+                 {config.provider === 'llama.cpp' && (
+                  <p className="text-xs text-slate-500 mt-1 italic">
+                    Podaj bazowy adres serwera. Aplikacja automatycznie użyje endpointu <code>/completion</code>.
+                  </p>
+                )}
               </div>
             </div>
           )}

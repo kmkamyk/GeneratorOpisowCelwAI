@@ -30,8 +30,8 @@ const GenerateIcon = () => (
 );
 
 const App: React.FC = () => {
-  const [goals, setGoals] = useState('');
-  const [tasks, setTasks] = useState('');
+  const [goals, setGoals] = useState(() => localStorage.getItem('savedGoals') || '');
+  const [tasks, setTasks] = useState(() => localStorage.getItem('savedTasks') || '');
   const [results, setResults] = useState<ResultItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +43,16 @@ const App: React.FC = () => {
     apiAddress: 'http://localhost:11434',
     modelName: 'llama3'
   });
+
+  // Save goals and tasks to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('savedGoals', goals);
+  }, [goals]);
+
+  useEffect(() => {
+    localStorage.setItem('savedTasks', tasks);
+  }, [tasks]);
+
 
   useEffect(() => {
     setLocalLlmConfig(prev => ({
@@ -132,8 +142,10 @@ const App: React.FC = () => {
     }
   }, [results, apiProvider, localLlmConfig]);
 
-  const handleClearHistory = () => {
+  const handleClearAll = () => {
     setResults([]);
+    setGoals('');
+    setTasks('');
   };
   
   const isLocalConfigInvalid = apiProvider === 'local' && (!localLlmConfig.apiAddress.trim() || !localLlmConfig.modelName.trim());
@@ -205,11 +217,11 @@ const App: React.FC = () => {
                     <div className="flex justify-between items-center mb-6 animate-fadeInUp">
                         <h2 className="text-3xl font-bold text-slate-800">Wygenerowane Opisy</h2>
                         <button 
-                            onClick={handleClearHistory}
+                            onClick={handleClearAll}
                             className="px-4 py-2 text-sm bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-700 rounded-lg transition-all duration-300"
-                            title="Wyczyść wszystkie wygenerowane opisy"
+                            title="Wyczyść wygenerowane opisy oraz wprowadzone dane"
                         >
-                            Wyczyść historię
+                            Wyczyść wszystko
                         </button>
                     </div>
                  )}
