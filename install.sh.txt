@@ -1,36 +1,49 @@
 #!/bin/bash
 
-# Skrypt do konfiguracji serwera Nginx dla aplikacji "Generator Opisów Celów" na systemie RHEL 8.
+# Skrypt do pełnej automatyzacji wdrożenia aplikacji "Generator Opisów Celów" na systemie RHEL 8.
+# Automatycznie instaluje zależności, buduje aplikację i konfiguruje serwer Nginx.
 # Uruchom ten skrypt z uprawnieniami roota, np. przez 'sudo bash install.sh.txt'
 
 # Zatrzymaj wykonywanie skryptu w przypadku błędu
 set -e
 
 # --- Konfiguracja ---
+# Automatyczne określenie ścieżki do katalogu projektu (gdzie znajduje się skrypt)
+PROJECT_ROOT=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # Katalog docelowy, gdzie zostaną umieszczone pliki aplikacji
 APP_DIRECTORY="/var/www/goal-generator-app"
-# Katalog źródłowy (zakładamy, że jest to podkatalog 'dist' w miejscu uruchomienia skryptu)
-SOURCE_DIRECTORY="./dist"
+# Katalog źródłowy (zbudowana aplikacja)
+SOURCE_DIRECTORY="$PROJECT_ROOT/dist"
 
-# --- Krok 1: Instalacja i Konfiguracja Nginx ---
-echo ">>> Krok 1/5: Konfiguracja Nginx..."
+# --- Krok 1: Sprawdzanie zależności (Node.js / npm) ---
+echo ">>> Krok 1/6: Sprawdzanie zależności (npm)..."
+if ! command -v npm &> /dev/null
+then
+    echo "BŁĄD: npm nie został znaleziony. Zainstaluj Node.js i npm, a następnie uruchom skrypt ponownie."
+    echo "Na RHEL 8 możesz to zrobić poleceniem: sudo dnf module install nodejs:18"
+    exit 1
+fi
+echo "Zależność 'npm' znaleziona."
+
+# --- Krok 2: Budowanie aplikacji ---
+echo ">>> Krok 2/6: Budowanie aplikacji..."
+cd "$PROJECT_ROOT"
+echo "Instalowanie zależności projektu (npm install)..."
+npm install
+echo "Budowanie aplikacji produkcyjnej (npm run build)..."
+npm run build # Zakładamy, że w package.json istnieje skrypt 'build'
+
+# --- Krok 3: Instalacja i Konfiguracja Nginx ---
+echo ">>> Krok 3/6: Konfiguracja Nginx..."
 
 # Sprawdzenie, czy Nginx jest zainstalowany
 if ! command -v nginx &> /dev/null
 then
     echo "Nginx nie został znaleziony. Próba instalacji..."
-    # Użyj dnf (RHEL 8+) lub yum jako fallback
-    if command -v dnf &> /dev/null; then
-        dnf install -y nginx
-    elif command -v yum &> /dev/null; then
-        yum install -y nginx
-    else
-        echo "Nie udało się zidentyfikować menedżera pakietów (dnf/yum). Zainstaluj Nginx ręcznie i uruchom skrypt ponownie."
-        exit 1
-    fi
+    dnf install -y nginx
 fi
 
-# Tworzenie pliku konfiguracyjnego Nginx w standardowej lokalizacji dla RHEL
+# Tworzenie pliku konfiguracyjnego Nginx
 NGINX_CONF_PATH="/etc/nginx/conf.d/goal-generator.conf"
 echo "Tworzenie pliku konfiguracyjnego w $NGINX_CONF_PATH..."
 cat <<EOF > $NGINX_CONF_PATH
@@ -47,7 +60,7 @@ server {
         try_files \$uri \$uri/ /index.html;
     }
 
-    # Dodatkowe nagłówki bezpieczeństwa (opcjonalnie, ale zalecane)
+    # Dodatkowe nagłówki bezpieczeństwa (zalecane)
     add_header X-Content-Type-Options "nosniff";
     add_header X-Frame-Options "DENY";
     add_header X-XSS-Protection "1; mode=block";
@@ -56,13 +69,13 @@ EOF
 
 echo "Konfiguracja Nginx została utworzona."
 
-# --- Krok 2: Przygotowanie katalogu aplikacji ---
-echo ">>> Krok 2/5: Przygotowanie katalogu aplikacji..."
+# --- Krok 4: Przygotowanie katalogu aplikacji ---
+echo ">>> Krok 4/6: Przygotowanie katalogu aplikacji..."
 
-# Sprawdzenie, czy katalog źródłowy istnieje
+# Sprawdzenie, czy katalog źródłowy (dist) istnieje po budowaniu
 if [ ! -d "$SOURCE_DIRECTORY" ]; then
-    echo "BŁĄD: Katalog źródłowy '$SOURCE_DIRECTORY' nie został znaleziony."
-    echo "Upewnij się, że zbudowałeś aplikację (np. 'npm run build') i uruchamiasz skrypt z głównego katalogu projektu."
+    echo "BŁĄD: Katalog '$SOURCE_DIRECTORY' nie został znaleziony po procesie budowania."
+    echo "Sprawdź, czy polecenie 'npm run build' zakończyło się pomyślnie i utworzyło katalog 'dist'."
     exit 1
 fi
 
@@ -71,32 +84,28 @@ mkdir -p "$APP_DIRECTORY"
 
 # Kopiowanie plików aplikacji z katalogu 'dist'
 echo "Kopiowanie plików aplikacji z '$SOURCE_DIRECTORY' do '$APP_DIRECTORY'..."
-rsync -a "$SOURCE_DIRECTORY/" "$APP_DIRECTORY/"
+rsync -a --delete "$SOURCE_DIRECTORY/" "$APP_DIRECTORY/"
 
 echo "Pliki aplikacji zostały skopiowane."
 
-# --- Krok 3: Ustawianie uprawnień plików ---
-echo ">>> Krok 3/5: Ustawianie uprawnień do plików..."
+# --- Krok 5: Ustawianie uprawnień i kontekstu SELinux ---
+echo ">>> Krok 5/6: Ustawianie uprawnień do plików i konfiguracja SELinux..."
 
 # Zmiana właściciela katalogu na użytkownika i grupę nginx
+echo "Zmiana właściciela katalogu i plików na 'nginx:nginx'..."
 chown -R nginx:nginx "$APP_DIRECTORY"
 
-echo "Właściciel plików został ustawiony na 'nginx:nginx'."
-
-# --- Krok 4: Konfiguracja SELinux ---
-echo ">>> Krok 4/5: Konfiguracja kontekstu SELinux..."
-# Jest to kluczowy krok w systemach RHEL, aby zezwolić Nginx na odczyt plików.
-# Jeśli SELinux jest wyłączony, to polecenie nie zaszkodzi.
-if command -v chcon &> /dev/null; then
-    echo "Ustawianie kontekstu httpd_sys_content_t dla katalogu aplikacji..."
+# Konfiguracja SELinux, aby zezwolić Nginx na odczyt plików
+if command -v chcon &> /dev/null && sestatus | grep -q "SELinux status: *enabled"; then
+    echo "Ustawianie kontekstu httpd_sys_content_t dla SELinux..."
     chcon -t httpd_sys_content_t -R "$APP_DIRECTORY"
 else
-    echo "Polecenie 'chcon' niedostępne, pomijanie konfiguracji SELinux."
+    echo "SELinux jest wyłączony lub polecenie 'chcon' jest niedostępne, pomijanie konfiguracji."
 fi
 
 
-# --- Krok 5: Finalizacja i Restart Usługi ---
-echo ">>> Krok 5/5: Finalizacja..."
+# --- Krok 6: Finalizacja i Restart Usługi ---
+echo ">>> Krok 6/6: Finalizacja..."
 
 # Sprawdzenie poprawności składni konfiguracji Nginx
 echo "Testowanie konfiguracji Nginx..."
@@ -109,7 +118,7 @@ systemctl enable nginx # Włącz Nginx przy starcie systemu
 
 echo ""
 echo "----------------------------------------------------"
-echo "✅ Instalacja zakończona pomyślnie!"
+echo "✅ Instalacja i wdrożenie zakończone pomyślnie!"
 echo "Twoja aplikacja powinna być dostępna pod adresem:"
 echo "http://<TWOJ_ADRES_IP_SERWERA>:8181"
 echo "----------------------------------------------------"
