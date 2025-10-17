@@ -1,22 +1,9 @@
 import { ResultItem, LocalLlmConfig } from '../types';
 
-const JSON_SCHEMA = {
-  "type": "object",
-  "properties": {
-    "description": {
-      "type": "string",
-      "description": "Wygenerowany, szczegółowy opis celu zawodowego."
-    },
-    "relevantTasks": {
-      "type": "array",
-      "description": "Lista zadań z Jiry, które zostały użyte do stworzenia opisu.",
-      "items": {
-        "type": "string"
-      }
-    }
-  },
-  "required": ["description", "relevantTasks"]
-};
+// Instrukcja dotycząca schematu JSON pozostaje przydatna dla modeli, które nie obsługują w pełni trybu JSON.
+const JSON_SCHEMA_INSTRUCTION = `
+Zwróć wynik w formacie JSON. Klucz 'relevantTasks' powinien zawierać listę pełnych nazw zadań (np. "PROJ-123: Analiza wymagań"), które wybrałeś. Wygeneruj wyłącznie obiekt JSON.
+`;
 
 const buildGenerationPrompt = (goal: string, tasks: string, style: string): string => {
   const styleInstruction = style !== 'Domyślny' 
@@ -39,9 +26,7 @@ const buildGenerationPrompt = (goal: string, tasks: string, style: string): stri
     Twoje zadania:
     1.  Dokładnie przeanalizuj listę zadań i zidentyfikuj te, które przyczyniły się do realizacji celu "${goal}".
     2.  Na podstawie wybranych zadań, napisz profesjonalny, szczegółowy opis celu (dwa do trzech akapitów), podkreślając wkład tych zadań i osiągnięte rezultaty.
-    3.  Zwróć wynik w formacie JSON, używając zdefiniowanego schematu. Klucz 'relevantTasks' powinien zawierać listę pełnych nazw zadań (np. "PROJ-123: Analiza wymagań"), które wybrałeś.
-
-    Wygeneruj wyłącznie obiekt JSON.
+    3.  ${JSON_SCHEMA_INSTRUCTION}
   `;
 };
 
@@ -73,7 +58,8 @@ const buildRefinePrompt = (description: string, action: 'shorten' | 'expand' | '
   `;
 };
 
-async function executeLocalApiCall(url: string, body: object) {
+// Ten pomocnik jest inspirowany kodem dostarczonym przez użytkownika, używając nowoczesnych punktów końcowych uzupełniania czatu.
+async function executeLocalApiCall(url: string, body: object, provider: 'ollama' | 'llama.cpp') {
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -83,15 +69,45 @@ async function executeLocalApiCall(url: string, body: object) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Błąd serwera (${response.status}): ${errorText}`);
+      throw new Error(`Błąd serwera (${response.status}) dla ${provider}: ${errorText}`);
     }
     return await response.json();
   } catch (error) {
-    if (error instanceof TypeError) { // Network error
-      throw new Error(`Nie udało się połączyć z serwerem pod adresem: ${url}. Upewnij się, że serwer jest uruchomiony i adres jest poprawny.`);
+    if (error instanceof TypeError) { // Błąd sieciowy
+      throw new Error(`Nie udało się połączyć z serwerem ${provider} pod adresem: ${url}. Upewnij się, że serwer jest uruchomiony i adres jest poprawny.`);
     }
-    throw error; // Re-throw other errors
+    throw error; // Ponowne rzucenie innych błędów
   }
+}
+
+// Funkcja do bezpiecznego parsowania potencjalnie źle sformatowanych ciągów JSON z LLM
+function safeJsonParse(jsonString: string): any {
+    try {
+        // Próba znalezienia początku obiektu lub tablicy JSON
+        const startIndex = jsonString.indexOf('{');
+        const startBracket = jsonString.indexOf('[');
+        
+        let actualStartIndex = -1;
+
+        if (startIndex > -1 && startBracket > -1) {
+            actualStartIndex = Math.min(startIndex, startBracket);
+        } else if (startIndex > -1) {
+            actualStartIndex = startIndex;
+        } else {
+            actualStartIndex = startBracket;
+        }
+
+        if (actualStartIndex === -1) {
+            throw new Error("Nie znaleziono obiektu ani tablicy JSON w ciągu znaków.");
+        }
+
+        const trimmedString = jsonString.substring(actualStartIndex);
+        return JSON.parse(trimmedString);
+    } catch (e) {
+        console.error("Nie udało się sparsować odpowiedzi LLM jako JSON:", e);
+        console.error("Oryginalny ciąg znaków:", jsonString);
+        throw new Error("Odpowiedź AI nie jest prawidłowym formatem JSON.");
+    }
 }
 
 export const generateDescriptionForSingleGoalLocal = async (
@@ -104,40 +120,43 @@ export const generateDescriptionForSingleGoalLocal = async (
   let requestBody;
   let apiUrl;
 
-  if (config.provider === 'ollama') {
-    apiUrl = new URL('/api/generate', config.apiAddress).toString();
-    requestBody = {
-      model: config.modelName,
-      prompt: prompt,
-      stream: false,
-      format: 'json',
-    };
-  } else { // llama.cpp
-    apiUrl = new URL('/completion', config.apiAddress).toString();
-    requestBody = {
-      prompt: prompt.replace("Wygeneruj wyłącznie obiekt JSON.", ""), // Llama.cpp uses schema, so instruction is redundant
-      n_predict: 1024,
-      json_schema: JSON_SCHEMA,
-    };
-  }
-
   try {
-    const data = await executeLocalApiCall(apiUrl, requestBody);
-    
-    let parsedJson;
     if (config.provider === 'ollama') {
-      parsedJson = JSON.parse(data.response);
-    } else { // llama.cpp
-      parsedJson = JSON.parse(data.content);
+        apiUrl = new URL('/api/chat', config.apiAddress).toString();
+        requestBody = {
+            model: config.modelName,
+            messages: [{ role: 'user', content: prompt }],
+            stream: false,
+            format: 'json',
+        };
+        const data = await executeLocalApiCall(apiUrl, requestBody, 'ollama');
+        const parsedJson = safeJsonParse(data.message.content);
+        
+        return {
+            goal,
+            description: parsedJson.description || "Nie udało się wygenerować opisu.",
+            usedTasks: parsedJson.relevantTasks || [],
+        };
+    } else { // llama.cpp (zakładając API zgodne z OpenAI)
+        apiUrl = new URL('/v1/chat/completions', config.apiAddress).toString();
+        requestBody = {
+            model: config.modelName,
+            messages: [{ role: 'user', content: prompt }],
+            stream: false,
+            response_format: { type: "json_object" },
+            temperature: 0.2, // Niższa temperatura dla bardziej przewidywalnego wyniku JSON
+        };
+        const data = await executeLocalApiCall(apiUrl, requestBody, 'llama.cpp');
+        const parsedJson = safeJsonParse(data.choices[0].message.content);
+
+        return {
+            goal,
+            description: parsedJson.description || "Nie udało się wygenerować opisu.",
+            usedTasks: parsedJson.relevantTasks || [],
+        };
     }
-    
-    return {
-      goal,
-      description: parsedJson.description || "Nie udało się wygenerować opisu.",
-      usedTasks: parsedJson.relevantTasks || [],
-    };
   } catch (error) {
-    console.error(`Error generating description for goal "${goal}" with ${config.provider}:`, error);
+    console.error(`Błąd podczas generowania opisu dla celu "${goal}" z ${config.provider}:`, error);
     const errorMessage = error instanceof Error ? error.message : "Nieznany błąd";
     return {
       goal,
@@ -156,31 +175,29 @@ export const refineDescriptionLocal = async (
   let requestBody;
   let apiUrl;
 
-  if (config.provider === 'ollama') {
-    apiUrl = new URL('/api/generate', config.apiAddress).toString();
-    requestBody = {
-      model: config.modelName,
-      prompt: prompt,
-      stream: false,
-    };
-  } else { // llama.cpp
-    apiUrl = new URL('/completion', config.apiAddress).toString();
-    requestBody = {
-      prompt: prompt,
-      n_predict: 512,
-    };
-  }
-  
   try {
-    const data = await executeLocalApiCall(apiUrl, requestBody);
-    
-    if (config.provider === 'ollama') {
-      return data.response.trim();
+     if (config.provider === 'ollama') {
+        apiUrl = new URL('/api/chat', config.apiAddress).toString();
+        requestBody = {
+            model: config.modelName,
+            messages: [{ role: 'user', content: prompt }],
+            stream: false,
+        };
+        const data = await executeLocalApiCall(apiUrl, requestBody, 'ollama');
+        return data.message.content.trim();
     } else { // llama.cpp
-      return data.content.trim();
+        apiUrl = new URL('/v1/chat/completions', config.apiAddress).toString();
+        requestBody = {
+            model: config.modelName,
+            messages: [{ role: 'user', content: prompt }],
+            stream: false,
+            temperature: 0.7,
+        };
+        const data = await executeLocalApiCall(apiUrl, requestBody, 'llama.cpp');
+        return data.choices[0].message.content.trim();
     }
   } catch (error) {
-     console.error(`Error refining description with ${config.provider}:`, error);
+     console.error(`Błąd podczas modyfikacji opisu z ${config.provider}:`, error);
      if (error instanceof Error) {
         throw error;
      }
